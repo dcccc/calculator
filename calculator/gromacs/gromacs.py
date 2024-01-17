@@ -75,18 +75,31 @@ def write_index_file(st, index_doc, index_file = "index.ndx" ):
     index_file.close()
     
 
-def run_cmd(cmd):
+def run_cmd(cmd，task_name=""):
 
-    cmd = cmd + " 1>stdout  2>stderr"
+    if task_name =="":
+        task_name = "task"
+
+    cmd = cmd + f" 1>{task_name}_run.out  2>{task_name}_run.err"
     status, stdout = subprocess.getstatusoutput(cmd)
-    stderr_str = open("./stderr", "r").read()            
+    stderr_str = open(f"./{task_name}_run.err", "r").read()            
     assert status == 0, stderr_str
 
 
 class Gromacs():
     def __init__(self, gmx_exe={}):
         self.gmx_exe = gmx_exe       
-        self.gmx_exe_sp = self.gmx_exe["gmx"]
+        self.gmx_exe_sp = self.gmx_exe.get("gmx", None)
+        self.openmpi = self.gmx_exe.get("openmpi", None)
+
+        # set the environment variables for openmpi
+        if self.openmpi:
+            openmpi_root = os.path.dirname(os.path.dirname(orca_exe["openmpi"]))
+            os.environ["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "") + ":" + openmpi_root + "/lib"
+            os.environ["OPAL_PREFIX"]     = openmpi_root
+            os.environ["PATH"]            = os.environ.get("PATH", "") + ":" + openmpi_root + "/bin"
+        
+
  
     def gen_tpr(self, mdp_para, structure, ff_list, replica_exchange = None, pos_restraint = None, 
                 index_para = None, conf_name = "conf.gro", ref_st = None ):
@@ -170,7 +183,7 @@ class Gromacs():
             if index_file:
                 cmd = cmd + f" -n {index_file}"
             
-            run_cmd(cmd)
+            run_cmd(cmd, task_name="gmx_grompp")
 
     def energy(self, edr_file = "md.edr", item = None, begin = 0 , end = None):
 
@@ -187,7 +200,7 @@ class Gromacs():
             cmd = cmd + f" -e {end}  "
         
         
-        run_cmd(cmd)
+        run_cmd(cmd, task_name="gmx_energy")
 
     def trjconv(self, traj_file_in = "md.xtc", tpr_file = "md.tpr", out_file ="md1.xtc",
                 group = 0, begin = None, end = None, skip = None, pbc = None,
@@ -211,7 +224,7 @@ class Gromacs():
             cmd = cmd + f" -dump {dump}  "
 
             
-        run_cmd(cmd)
+        run_cmd(cmd, task_name="gmx_trjconv")
 
     def rmsd(self, group = 0, index_file = None):
         
@@ -228,7 +241,7 @@ class Gromacs():
             index_cmd = f" -n {index_file} "
             cmd = cmd + index_cmd
         
-        run_cmd(cmd)
+        run_cmd(cmd, task_name="gmx_rms")
         
         # delete rmsd.xtc
         os.remove("./rmsd.xtc")
@@ -336,7 +349,7 @@ class Gromacs():
                 cmd = f"{mpirun} -np {replica_exchange_num} {gmx_exe} mdrun -ntomp {omp_num}"
                 cmd = cmd + f" -multidir  {dir_str} -replex {replex} "
         
-                run_cmd(cmd)
+                run_cmd(cmd, task_name="gmx_md")
         
     
     def nmeig(self, run_type = "ntmpi", last = 10000):
@@ -348,7 +361,7 @@ class Gromacs():
             
         cmd = f"{gmx_exe} nmeig -f nm.mtx -s md.tpr -last {last} "            
         
-        run_cmd(cmd)
+        run_cmd(cmd, task_name="gmx_nmeig")
 
         # eigenfreq = np.loadtxt("./eigenfreq.xvg", comments=["@", "#"]).T[1]
         # eigenval  = np.loadtxt("./eigenval.xvg",  comments=["@", "#"]).T[1]
@@ -368,7 +381,7 @@ class Gromacs():
         for i in ["b" , "e" , "temp" , "nbin"  ]:
             cmd = cmd + eval(" f' -{i}  %s ' " ) %(eval(i)) if eval(f"{i}") else cmd
 
-        run_cmd(cmd)
+        run_cmd(cmd, task_name="gmx_bar")
 
 
     def gmx_wham(self, b = None, bins = None, temp = None, tol = None, max = None, min = None) :
@@ -390,7 +403,7 @@ class Gromacs():
         for i in ["b" , "bins" , "temp" , "tol" , "max" ,"min" ]:
             cmd = cmd + eval(" f' -{i}  %s ' " ) %(eval(i)) if eval(f"{i}") else cmd
 
-        run_cmd(cmd)
+        run_cmd(cmd, task_name="gmx_wham")
         
     
     def convert_tpr(self, tpr_file = "./md.tpr", extend = False, time = 0, index_file = None, group=None):
@@ -405,7 +418,7 @@ class Gromacs():
         if index_file:
             cmd = f"echo {group} | {cmd} -n {index_file} "
         
-        run_cmd(cmd)
+        run_cmd(cmd, task_name="gmx_convert_tpr")
         
     
     def extend_run(self, dir_path = "./", time = 100, task_type="md", 
@@ -436,5 +449,5 @@ class Gromacs():
 
         cmd = f"{self.gmx_exe_sp}  mdrun -nt {core_num} -s {tpr_file} -rerun {traj_file} -e md.edr"
 
-        run_cmd(cmd)
+        run_cmd(cmd, task_name="gmx_rerun")
                 

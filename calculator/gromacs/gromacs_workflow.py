@@ -5,10 +5,10 @@ from calculator.gromacs.mdp_write import *
 from calculator.gromacs.pdb_gro   import *
 from calculator.gromacs.top_itp   import *
 from calculator.gromacs.gromacs   import *
-from calculator.gromacs.logger    import *
+from calculator.util.logger       import *
 
 def read_st(st_file):
-    if len(st_file) < 256 and os.path.exists(st_file):
+    if "\n" not in st_file < 256 and os.path.exists(st_file):
         structure = Structure.read(st_file)
     elif isinstance(st_file, str)  :
         if "POSITION" in st_file:
@@ -30,6 +30,9 @@ class Gromacs_workflow():
         if "openmpi_lib" in gmx_exe.keys():
             os.environ["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "") + ":" + gmx_exe["openmpi_lib"]
             os.environ["OPAL_PREFIX"] = os.path.dirmane(gmx_exe["openmpi_lib"]) 
+        elif "openmpi" in orca_exe.keys():
+            os.environ["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "") + ":" + orca_exe["openmpi"] + "/lib"
+            os.environ["OPAL_PREFIX"]     = os.path.dirmane(orca_exe["openmpi"])  + "/lib"
 
         self.gmx = Gromacs(gmx_exe = gmx_exe)
         self.base_path = os.getcwd()
